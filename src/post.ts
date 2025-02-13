@@ -84,9 +84,7 @@ export class TakoPostClient {
 
             const context = composeContext({
                 state,
-                template:
-                    this.runtime.character.templates?.takoPostTemplate ||
-                    takoPostTemplate,
+                template: takoPostTemplate,
             });
 
             elizaLogger.debug("Generate cast prompt:", context);

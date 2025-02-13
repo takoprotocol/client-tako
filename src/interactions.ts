@@ -223,10 +223,7 @@ export class TakoInteractionClient {
 
         const shouldRespondContext = composeContext({
             state,
-            template:
-                this.runtime.character.templates?.takoShouldRespondTemplate ||
-                this.runtime.character?.templates?.shouldRespondTemplate ||
-                takoShouldRespondTemplate(),
+            template: takoShouldRespondTemplate(),
         });
 
         const shouldRespond = await generateShouldRespond({
@@ -243,10 +240,7 @@ export class TakoInteractionClient {
 
         const context = composeContext({
             state,
-            template:
-                this.runtime.character.templates?.takoMessageHandlerTemplate ||
-                this.runtime.character?.templates?.messageHandlerTemplate ||
-                takoMessageHandlerTemplate,
+            template: takoMessageHandlerTemplate,
         });
 
         const response = await generateMessageResponse({
