@@ -30,7 +30,9 @@ class TakoManager {
 
 export const TakoClientInterface: Client = {
     async start(runtime: IAgentRuntime) {
-        const startDelay = runtime.getSetting("TAKO_START_DELAY") || false;
+        const takoConfig: TakoConfig = await validateTakoConfig(runtime);
+
+        const startDelay = takoConfig.TAKO_START_DELAY || false;
         if (startDelay) {
             const randomSeconds = Math.floor(Math.random() * 1 * 60);
             elizaLogger.log(
@@ -38,8 +40,6 @@ export const TakoClientInterface: Client = {
             );
             await wait(randomSeconds * 1000);
         }
-
-        const takoConfig: TakoConfig = await validateTakoConfig(runtime);
 
         elizaLogger.log("Tako client started");
 
@@ -59,10 +59,7 @@ export const TakoClientInterface: Client = {
     },
 
     async stop(_runtime: IAgentRuntime) {
-        elizaLogger.warn(
-            "Tako client does not support stopping yet",
-            _runtime.getSetting("TAKO_FID")
-        );
+        elizaLogger.warn("Tako client does not support stopping yet");
     },
 };
 

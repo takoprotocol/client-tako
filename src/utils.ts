@@ -1,6 +1,9 @@
 import {
     elizaLogger,
+    generateText,
     getEmbeddingZeroVector,
+    IAgentRuntime,
+    ModelClass,
     stringToUuid,
 } from "@elizaos/core";
 import { ClientBase } from "./base";
@@ -16,6 +19,7 @@ export const wait = (minTime: number = 1000, maxTime: number = 3000) => {
 export const removeQuotes = (str: string) =>
     str.replace(/^['"](.*)['"]$/, "$1");
 
+// TODO: Implement thread
 export async function buildConversationThread(
     cast: FCCastTako,
     client: ClientBase,
@@ -124,3 +128,92 @@ export async function buildConversationThread(
 
     return thread;
 }
+
+export const parseRespondTypeFromText = (
+    text: string
+): "REPLY" | "LIKE" | "QUOTE" | null => {
+    const match = text
+        .split("\n")[0]
+        .trim()
+        .replace("[", "")
+        .toUpperCase()
+        .replace("]", "")
+        .match(/^(REPLY|LIKE|QUOTE)$/i);
+    return match
+        ? (match[0].toUpperCase() as "REPLY" | "LIKE" | "QUOTE")
+        : text.includes("REPLY")
+          ? "REPLY"
+          : text.includes("LIKE")
+            ? "LIKE"
+            : text.includes("QUOTE")
+              ? "QUOTE"
+              : null;
+};
+
+/**
+ * Sends a message to the model to determine if it respond type to the given context.
+ * @param opts - The options for the generateText request
+ * @param opts.context The context to evaluate for response
+ * @param opts.stop A list of strings to stop the generateText at
+ * @param opts.model The model to use for generateText
+ * @param opts.frequency_penalty The frequency penalty to apply (0.0 to 2.0)
+ * @param opts.presence_penalty The presence penalty to apply (0.0 to 2.0)
+ * @param opts.temperature The temperature to control randomness (0.0 to 2.0)
+ * @param opts.serverUrl The URL of the API server
+ * @param opts.max_context_length Maximum allowed context length in tokens
+ * @param opts.max_response_length Maximum allowed response length in tokens
+ * @returns Promise resolving to "REPLY", "LIKE", "QUOTE" or null
+ */
+export async function generateRespondType({
+    runtime,
+    context,
+    modelClass,
+}: {
+    runtime: IAgentRuntime;
+    context: string;
+    modelClass: ModelClass;
+}): Promise<"REPLY" | "LIKE" | "QUOTE" | null> {
+    let retryDelay = 1000;
+    while (true) {
+        try {
+            elizaLogger.debug(
+                "Attempting to generate text with context:",
+                context
+            );
+            const response = await generateText({
+                runtime,
+                context,
+                modelClass,
+            });
+
+            elizaLogger.debug("Received response from generateText:", response);
+            const parsedResponseType = parseRespondTypeFromText(
+                response.trim()
+            );
+            if (parsedResponseType) {
+                elizaLogger.debug("Parsed response type:", parsedResponseType);
+                return parsedResponseType;
+            } else {
+                elizaLogger.debug("generateRespondType no response");
+            }
+        } catch (error) {
+            elizaLogger.error("Error in generateRespondType:", error);
+            if (
+                error instanceof TypeError &&
+                error.message.includes("queueTextCompletion")
+            ) {
+                elizaLogger.error(
+                    "TypeError: Cannot read properties of null (reading 'queueTextCompletion')"
+                );
+            }
+        }
+
+        elizaLogger.log(`Retrying in ${retryDelay}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, retryDelay));
+        retryDelay *= 2;
+    }
+}
+
+export const respondTypeFooter = `The available options are [REPLY], [LIKE], or [QUOTE]. Choose the most appropriate option.
+If {{agentName}} unsure which option to choose, just select LIKE.
+Your response must include one of the options.`;

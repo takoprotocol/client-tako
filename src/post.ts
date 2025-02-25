@@ -100,9 +100,23 @@ export class TakoPostClient {
                 text: newCastText,
             };
 
+            // Random community
+            const randomCommunityIndex = Math.floor(
+                Math.random() *
+                    this.client.takoConfig.TAKO_NEW_CAST_TO_COMMUNITY.length
+            );
+            const randomCommunity =
+                this.client.takoConfig.TAKO_NEW_CAST_TO_COMMUNITY?.[
+                    randomCommunityIndex
+                ];
+
+            elizaLogger.log("Generate cast community:", randomCommunity);
+
             const memory = await this.client.postCast({
                 roomId,
                 content: newCast,
+                type: "CAST",
+                targetCommunity: randomCommunity,
             });
 
             if (memory) {

@@ -10,6 +10,8 @@ enum EndpointEnum {
     feed = "/v1/feed/cast",
     sendCast = "/v1/cast",
     sendReply = "/v1/cast/reply",
+    sendQuote = "/v1/cast/quote",
+    sendLike = "/v1/cast/like",
     notification = "/v1/notification",
 }
 
@@ -187,6 +189,7 @@ export class TakoApiClient {
         const {
             text,
             replyId,
+            quoteId,
             mentions,
             mentionsPositions,
             communityId,
@@ -197,17 +200,35 @@ export class TakoApiClient {
             text: text === "" ? undefined : text,
             title: title === "" ? undefined : title,
             community_id: communityId,
-            cast_hash: replyId,
+            cast_hash: replyId || quoteId,
             mentions: mentions,
             mentions_positions: mentionsPositions,
         };
 
         const response = await this.request<{
             hash: string;
-        }>(replyId ? EndpointEnum.sendReply : EndpointEnum.sendCast, {
-            method: "POST",
-            body: JSON.stringify(requestData),
-        });
+        }>(
+            replyId
+                ? EndpointEnum.sendReply
+                : quoteId
+                  ? EndpointEnum.sendQuote
+                  : EndpointEnum.sendCast,
+            {
+                method: "POST",
+                body: JSON.stringify(requestData),
+            }
+        );
         return response.data;
+    }
+
+    async sendLike(castHash: string) {
+        const response = await this.request(EndpointEnum.sendLike, {
+            method: "POST",
+            body: JSON.stringify({
+                cast_hash: castHash,
+            }),
+        });
+
+        return response.status === "success";
     }
 }

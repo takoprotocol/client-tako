@@ -34,7 +34,7 @@ export const takoEnvSchema = z.object({
     TAKO_NEW_CAST_INTERVAL: z.number().int().default(10),
     TAKO_PROACTIVE_COMMENTING: z.boolean().default(false),
     TAKO_NEW_CAST: z.boolean().default(false),
-    TAKO_NEW_CAST_TO_COMMUNITY: z.string().default(""),
+    TAKO_NEW_CAST_TO_COMMUNITY: z.array(takoCommunitySchema).default([]),
 
     TAKO_RETRY_LIMIT: z.number().int().default(2),
     MAX_CAST_LENGTH: z.number().int().default(DEFAULT_MAX_CAST_LENGTH),
@@ -193,10 +193,11 @@ export async function validateTakoConfig(
                         process.env.TAKO_NEW_CAST
                 ) ?? false,
 
-            // string
-            TAKO_NEW_CAST_TO_COMMUNITY:
+            // comma separated string
+            TAKO_NEW_CAST_TO_COMMUNITY: parseTargetCommunities(
                 runtime.getSetting("TAKO_NEW_CAST_TO_COMMUNITY") ||
-                process.env.TAKO_NEW_CAST_TO_COMMUNITY,
+                    process.env.TAKO_NEW_CAST_TO_COMMUNITY
+            ),
 
             // int
             TAKO_RETRY_LIMIT: safeParseInt(

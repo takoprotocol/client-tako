@@ -1,8 +1,11 @@
 import {
     composeContext,
+    Content,
     elizaLogger,
     generateMessageResponse,
     generateShouldRespond,
+    generateWebSearch,
+    HandlerCallback,
     IAgentRuntime,
     Memory,
     ModelClass,
@@ -13,9 +16,11 @@ import { FCCastTako } from "./types/cast.ts";
 import { buildConversationThread, removeQuotes } from "./utils.ts";
 import { getContent, getUserAndRoomId } from "./utils/cast.ts";
 import {
+    takoKeywordTemplate,
     takoMessageHandlerTemplate,
     takoShouldRespondTemplate,
 } from "./utils/template.ts";
+import { generateWebSearchKeywords } from "./utils/generate.ts";
 
 export class TakoInteractionClient {
     client: ClientBase;
@@ -198,6 +203,9 @@ export class TakoInteractionClient {
   Text: ${cast.metadata.content}`;
         };
         const plainTextCurrentCast = _plainTextCast(cast);
+        const plainTextCurrentQuoteCast = cast.quote_cast
+            ? _plainTextCast(cast.quote_cast)
+            : "";
 
         const plainTextConversation = thread
             .map(
@@ -214,10 +222,11 @@ export class TakoInteractionClient {
             .join("\n\n");
         elizaLogger.debug("Processing Conversation: ", plainTextConversation);
 
-        const state = await this.runtime.composeState(message, {
+        let state = await this.runtime.composeState(message, {
             takoApiClient: this.client.takoApiClient,
             takoUserName: this.client.profile.username,
             plainTextCurrentCast,
+            plainTextCurrentQuoteCast,
             plainTextConversation,
         });
 
@@ -238,28 +247,109 @@ export class TakoInteractionClient {
             return { text: "Response Decision:", action: shouldRespond };
         }
 
-        const context = composeContext({
-            state,
-            template: takoMessageHandlerTemplate,
-        });
+        // TODO: use respond type
+        // const respondTypeContext = composeContext({
+        //     state,
+        //     template: takoRespondTypeTemplate(),
+        // });
 
-        const response = await generateMessageResponse({
-            runtime: this.runtime,
-            context,
-            modelClass: ModelClass.LARGE,
-        });
-        response.inReplyTo = stringToUuid(
-            cast.hash + "-" + this.runtime.agentId
-        );
-        response.text = removeQuotes(response.text);
+        // const respondType = await generateRespondType({
+        //     runtime: this.runtime,
+        //     context: respondTypeContext,
+        //     modelClass: ModelClass.MEDIUM,
+        // });
+        const respondType = "REPLY" as "REPLY" | "LIKE" | "QUOTE";
 
-        await this.client.postCast({
-            roomId: message.roomId,
-            content: response,
-            reply: {
-                hash: cast.hash,
-                fid: cast.author.fid,
-            },
-        });
+        if (respondType === "REPLY" || respondType === "QUOTE") {
+            const callback: HandlerCallback = async (response: Content) => {
+                const memory = await this.client.postCast({
+                    roomId: message.roomId,
+                    content: response,
+                    type: respondType,
+                    targetCast: {
+                        hash: cast.hash,
+                        fid: cast.author.fid,
+                    },
+                });
+                return [memory];
+            };
+
+            try {
+                const apiKey = this.runtime.getSetting(
+                    "TAVILY_API_KEY"
+                ) as string;
+                if (!!apiKey && apiKey !== "") {
+                    const keywordContext = composeContext({
+                        state,
+                        template: takoKeywordTemplate,
+                    });
+                    const webSearchQuery = await generateWebSearchKeywords({
+                        runtime: this.runtime,
+                        context: keywordContext,
+                        modelClass: ModelClass.SMALL,
+                    });
+
+                    elizaLogger.debug("Web search query:", webSearchQuery);
+
+                    if (!!webSearchQuery && webSearchQuery !== "") {
+                        const webSearch = await generateWebSearch(
+                            webSearchQuery,
+                            this.runtime
+                        );
+                        if (webSearch.answer) {
+                            state = await this.runtime.composeState(message, {
+                                takoApiClient: this.client.takoApiClient,
+                                takoUserName: this.client.profile.username,
+                                plainTextCurrentCast,
+                                plainTextCurrentQuoteCast,
+                                plainTextConversation,
+                                webSearchContext: `Summary: ${webSearch.answer}, Partial Content: ${webSearch.results.map((r) => r.content).join(", ")}`,
+                            });
+                        }
+                    }
+                }
+            } catch {
+                // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+                null;
+            }
+
+            const context = composeContext({
+                state,
+                template: takoMessageHandlerTemplate,
+            });
+
+            const response = await generateMessageResponse({
+                runtime: this.runtime,
+                context,
+                modelClass: ModelClass.LARGE,
+            });
+            response.inReplyTo = stringToUuid(
+                cast.hash + "-" + this.runtime.agentId
+            );
+            response.text = removeQuotes(response.text);
+
+            await callback(response);
+
+            // TODO: process the response messages
+            // for (const responseMessage of responseMessages) {
+            //     if (
+            //         responseMessage ===
+            //         responseMessages[responseMessages.length - 1]
+            //     ) {
+            //         responseMessage.content.action = response.action;
+            //     } else {
+            //         responseMessage.content.action = "CONTINUE";
+            //     }
+            // }
+
+            // await this.runtime.processActions(
+            //     message,
+            //     responseMessages,
+            //     state,
+            //     callback
+            // );
+        } else if (respondType === "LIKE") {
+            await this.client.likeCast(cast.hash);
+        }
     }
 }

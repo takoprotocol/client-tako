@@ -337,17 +337,21 @@ export class ClientBase extends EventEmitter {
         roomId,
         userId,
         content,
-        reply,
+        type,
+        targetCast,
+        targetCommunity,
     }: {
         roomId: UUID;
         userId?: UUID;
         content: Content;
-        reply?: {
+        type: "CAST" | "REPLY" | "QUOTE";
+        targetCast?: {
             hash: string;
             fid: number;
         };
+        targetCommunity?: string;
     }) {
-        elizaLogger.log(`Posting new cast or reply`);
+        elizaLogger.log(`Posting new ${type}`);
 
         try {
             let sentCastHash: string | null = null;
@@ -369,18 +373,26 @@ export class ClientBase extends EventEmitter {
                 return;
             }
 
+            const targetData =
+                type === "REPLY"
+                    ? {
+                          replyId: targetCast?.hash,
+                          replyFid: targetCast?.fid,
+                      }
+                    : type === "QUOTE"
+                      ? {
+                            quoteId: targetCast?.hash,
+                            quoteFid: targetCast?.fid,
+                        }
+                      : undefined;
+
             // sent cast
             const sentResult = await this.requestQueue.add(async () =>
                 this.takoApiClient.sendCast({
                     text: cleanedText,
                     assetUrls: [],
-                    replyId: reply?.hash,
-                    replyFid: reply?.fid,
-                    communityId: reply?.hash
-                        ? undefined
-                        : this.takoConfig.TAKO_NEW_CAST_TO_COMMUNITY === ""
-                          ? undefined
-                          : this.takoConfig.TAKO_NEW_CAST_TO_COMMUNITY,
+                    ...targetData,
+                    communityId: type === "REPLY" ? undefined : targetCommunity,
                 })
             );
 
@@ -409,6 +421,23 @@ export class ClientBase extends EventEmitter {
             return memory;
         } catch (error) {
             elizaLogger.error("Error new cast or reply:", error);
+        }
+    }
+
+    async likeCast(castHash: string) {
+        elizaLogger.log(`Liking cast: ${castHash}`);
+
+        try {
+            const result = await this.requestQueue.add(async () =>
+                this.takoApiClient.sendLike(castHash)
+            );
+
+            await wait();
+
+            return result;
+        } catch (error) {
+            elizaLogger.error("Error liking cast:", error);
+            return false;
         }
     }
 }
