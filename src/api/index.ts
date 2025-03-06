@@ -1,5 +1,5 @@
 import { TakoConfig } from "../environment";
-import { FCCastTakoResponse } from "../types";
+import { Community, FCCastTakoResponse } from "../types";
 import { CommonResponse, CommonTakoListResponse } from "../types/api";
 import { FCProfileTakoResponse } from "../types/profile";
 import { formatTakoProfile, formatTakoPub } from "../utils/format";
@@ -13,6 +13,7 @@ enum EndpointEnum {
     sendQuote = "/v1/cast/quote",
     sendLike = "/v1/cast/like",
     notification = "/v1/notification",
+    community = "/v1/community",
 }
 
 const BASE_URL = "https://open-api.dev.tako.so";
@@ -172,6 +173,16 @@ export class TakoApiClient {
         return response.data.items
             .filter((item) => !!item.cast && !item.cast.is_deleted)
             .map((item) => formatTakoPub(item.cast));
+    }
+
+    async getCommunityInfo(community_id: string) {
+        const response = await this.request<Community>(EndpointEnum.community, {
+            method: "GET",
+            params: {
+                community_id,
+            },
+        });
+        return response.data;
     }
 
     async sendCast(cast: {

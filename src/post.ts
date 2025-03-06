@@ -67,6 +67,23 @@ export class TakoPostClient {
 
             elizaLogger.log("Generate cast topics:\n", topics);
 
+            // Random community
+            const randomCommunityIndex = Math.floor(
+                Math.random() *
+                    this.client.takoConfig.TAKO_NEW_CAST_TO_COMMUNITY.length
+            );
+            const randomCommunity =
+                this.client.takoConfig.TAKO_NEW_CAST_TO_COMMUNITY?.[
+                    randomCommunityIndex
+                ];
+
+            elizaLogger.log("Generate cast community:", randomCommunity);
+
+            const communityInfo =
+                await this.client.fetchCommunity(randomCommunity);
+
+            elizaLogger.log("Generate cast community info:", communityInfo);
+
             const state = await this.runtime.composeState(
                 {
                     userId: this.runtime.agentId,
@@ -79,6 +96,10 @@ export class TakoPostClient {
                 },
                 {
                     takoUserName: this.client.profile.username,
+                    communityInfo: communityInfo
+                        ? `Community name:${communityInfo?.name}
+Community description: ${communityInfo?.description}`
+                        : undefined,
                 }
             );
 
@@ -99,18 +120,6 @@ export class TakoPostClient {
             const newCast: Content = {
                 text: newCastText,
             };
-
-            // Random community
-            const randomCommunityIndex = Math.floor(
-                Math.random() *
-                    this.client.takoConfig.TAKO_NEW_CAST_TO_COMMUNITY.length
-            );
-            const randomCommunity =
-                this.client.takoConfig.TAKO_NEW_CAST_TO_COMMUNITY?.[
-                    randomCommunityIndex
-                ];
-
-            elizaLogger.log("Generate cast community:", randomCommunity);
 
             const memory = await this.client.postCast({
                 roomId,

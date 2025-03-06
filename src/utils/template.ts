@@ -24,6 +24,9 @@ Try to avoid repeatedly using words or phrases that appear in recent interaction
 Current Post:
 {{plainTextCurrentCast}}
 
+Current Post ImageDescription:
+{{plainTextCurrentCastImageDescription}}
+
 Current Quote Post:
 {{plainTextCurrentQuoteCast}}
 
@@ -71,6 +74,9 @@ For other users:
 
 Current Post:
 {{plainTextCurrentCast}}
+
+Current Post ImageDescription:
+{{plainTextCurrentCastImageDescription}}
 
 Current Quote Post:
 {{plainTextCurrentQuoteCast}}
@@ -145,6 +151,9 @@ export const takoPostTemplate = `
 {{characterPostExamples}}
 
 {{postDirections}}
+
+# Community information where the post is located
+{{communityInfo}}
 
 # Task: Generate a post in the voice and style and perspective of {{agentName}} @{{takoUserName}}.
 Write a post that is {{adjective}} about {{topic}} (without mentioning {{topic}} directly), from the perspective of {{agentName}}. Do not add commentary or acknowledge this request, just write the post.

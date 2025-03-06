@@ -11,7 +11,7 @@ import {
 import { EventEmitter } from "events";
 import { TakoApiClient } from "./api/index.ts";
 import { TakoConfig } from "./environment.ts";
-import { FCCastTako } from "./types/index.ts";
+import { Community, FCCastTako } from "./types/index.ts";
 import { FCProfileTako } from "./types/profile.ts";
 import { getContent, getUserAndRoomId } from "./utils/cast.ts";
 import { wait } from "./utils.ts";
@@ -329,6 +329,43 @@ export class ClientBase extends EventEmitter {
         await this.runtime.cacheManager.set(
             `tako/${profile.fid}/profile`,
             profile
+        );
+    }
+    // #endregion
+
+    // #region community info
+    async fetchCommunity(communityId: string): Promise<Community> {
+        const cached = await this.getCachedCommunity(communityId);
+
+        if (cached) return cached;
+
+        try {
+            const community = await this.requestQueue.add(async () => {
+                const community =
+                    await this.takoApiClient.getCommunityInfo(communityId);
+                return community;
+            });
+
+            this.cacheCommunity(community);
+
+            return community;
+        } catch (error) {
+            console.error("Error fetching Tako community info:", error);
+
+            return undefined;
+        }
+    }
+
+    async getCachedCommunity(communityId: string) {
+        return await this.runtime.cacheManager.get<Community>(
+            `tako/${communityId}/community`
+        );
+    }
+
+    async cacheCommunity(community: Community) {
+        await this.runtime.cacheManager.set(
+            `tako/${community.community_id}/community`,
+            community
         );
     }
     // #endregion

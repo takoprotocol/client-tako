@@ -7,17 +7,24 @@ import {
     generateWebSearch,
     HandlerCallback,
     IAgentRuntime,
+    IImageDescriptionService,
     Memory,
     ModelClass,
+    ServiceType,
     stringToUuid,
 } from "@elizaos/core";
 import { ClientBase } from "./base";
 import { FCCastTako } from "./types/cast.ts";
-import { buildConversationThread, removeQuotes } from "./utils.ts";
+import {
+    buildConversationThread,
+    generateRespondType,
+    removeQuotes,
+} from "./utils.ts";
 import { getContent, getUserAndRoomId } from "./utils/cast.ts";
 import {
     takoKeywordTemplate,
     takoMessageHandlerTemplate,
+    takoRespondTypeTemplate,
     takoShouldRespondTemplate,
 } from "./utils/template.ts";
 import { generateWebSearchKeywords } from "./utils/generate.ts";
@@ -199,8 +206,8 @@ export class TakoInteractionClient {
         elizaLogger.log("Processing Cast: ", cast.hash);
         const _plainTextCast = (cast: FCCastTako) => {
             return `Hash: ${cast.hash}
-  From: ${cast.author.displayName} (@${cast.author.username})
-  Text: ${cast.metadata.content}`;
+From: ${cast.author.displayName} (@${cast.author.username})
+Text: ${cast.metadata.content}`;
         };
         const plainTextCurrentCast = _plainTextCast(cast);
         const plainTextCurrentQuoteCast = cast.quote_cast
@@ -222,10 +229,35 @@ export class TakoInteractionClient {
             .join("\n\n");
         elizaLogger.debug("Processing Conversation: ", plainTextConversation);
 
+        const imageDescriptions: {
+            title: string;
+            description: string;
+        }[] = [];
+        for (const image of cast.metadata.images) {
+            if (!image.url) {
+                continue;
+            }
+            const description = await this.runtime
+                .getService<IImageDescriptionService>(
+                    ServiceType.IMAGE_DESCRIPTION
+                )
+                .describeImage(image.url);
+            elizaLogger.debug("Processing Image Description: ", description);
+            imageDescriptions.push(description);
+        }
+        let plainTextCurrentCastImageDescription: string;
+        imageDescriptions.map((imageDescription, index) => {
+            if (imageDescription.description.length > 0) {
+                plainTextCurrentCastImageDescription = `${plainTextCurrentCastImageDescription}
+ImageDescription(${index + 1}): ${imageDescription.title}-${imageDescription.description}`;
+            }
+        });
+
         let state = await this.runtime.composeState(message, {
             takoApiClient: this.client.takoApiClient,
             takoUserName: this.client.profile.username,
             plainTextCurrentCast,
+            plainTextCurrentCastImageDescription,
             plainTextCurrentQuoteCast,
             plainTextConversation,
         });
@@ -247,18 +279,16 @@ export class TakoInteractionClient {
             return { text: "Response Decision:", action: shouldRespond };
         }
 
-        // TODO: use respond type
-        // const respondTypeContext = composeContext({
-        //     state,
-        //     template: takoRespondTypeTemplate(),
-        // });
+        const respondTypeContext = composeContext({
+            state,
+            template: takoRespondTypeTemplate(),
+        });
 
-        // const respondType = await generateRespondType({
-        //     runtime: this.runtime,
-        //     context: respondTypeContext,
-        //     modelClass: ModelClass.MEDIUM,
-        // });
-        const respondType = "REPLY" as "REPLY" | "LIKE" | "QUOTE";
+        const respondType = await generateRespondType({
+            runtime: this.runtime,
+            context: respondTypeContext,
+            modelClass: ModelClass.MEDIUM,
+        });
 
         if (respondType === "REPLY" || respondType === "QUOTE") {
             const callback: HandlerCallback = async (response: Content) => {
@@ -301,6 +331,7 @@ export class TakoInteractionClient {
                                 takoApiClient: this.client.takoApiClient,
                                 takoUserName: this.client.profile.username,
                                 plainTextCurrentCast,
+                                plainTextCurrentCastImageDescription,
                                 plainTextCurrentQuoteCast,
                                 plainTextConversation,
                                 webSearchContext: `Summary: ${webSearch.answer}, Partial Content: ${webSearch.results.map((r) => r.content).join(", ")}`,
